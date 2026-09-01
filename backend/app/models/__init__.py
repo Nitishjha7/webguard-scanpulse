@@ -2,7 +2,14 @@
 which is what Alembic autogenerate reads.
 """
 from app.models.base import BaseModel, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+from app.models.incident import OPEN_STATUSES, Incident, IncidentStatus
 from app.models.monitor import Monitor
+from app.models.notification import (
+    DEFAULT_EVENTS,
+    AlertEvent,
+    ChannelType,
+    NotificationChannel,
+)
 from app.models.organization import Organization
 from app.models.scans import PingLog, SecurityAudit, SslScan
 from app.models.user import WRITE_ROLES, User, UserRole
@@ -20,4 +27,11 @@ __all__ = [
     "PingLog",
     "SslScan",
     "SecurityAudit",
+    "Incident",
+    "IncidentStatus",
+    "OPEN_STATUSES",
+    "NotificationChannel",
+    "ChannelType",
+    "AlertEvent",
+    "DEFAULT_EVENTS",
 ]

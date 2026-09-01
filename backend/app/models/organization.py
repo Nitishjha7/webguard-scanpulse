@@ -21,6 +21,9 @@ class Organization(BaseModel):
     monitors = relationship(
         "Monitor", back_populates="organization", cascade="all, delete-orphan", lazy="selectin"
     )
+    notification_channels = relationship(
+        "NotificationChannel", back_populates="organization", cascade="all, delete-orphan"
+    )
 
     @staticmethod
     def slugify(value: str) -> str:

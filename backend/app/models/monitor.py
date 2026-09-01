@@ -40,6 +40,26 @@ class Monitor(BaseModel):
         sa.DateTime(timezone=True), nullable=True
     )
 
+    # --- Quorum state -----------------------------------------------------
+    #
+    # Counters rather than an aggregate over ping_logs: the state machine runs
+    # on every single probe, and scanning the highest-volume table each time
+    # would make uptime checks scale with history length.
+    consecutive_failures: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=0, server_default="0"
+    )
+    consecutive_degraded: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=0, server_default="0"
+    )
+    #: Failed probes required before an incident opens. 2 is the anti-flapping
+    #: default from the spec - one blip must never page anyone.
+    failure_threshold: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=2, server_default="2"
+    )
+    #: Latency above this marks the monitor DEGRADED rather than DOWN.
+    #: Null disables degraded detection for this monitor.
+    degraded_latency_ms: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+
     organization = relationship("Organization", back_populates="monitors")
     ping_logs = relationship(
         "PingLog", back_populates="monitor", cascade="all, delete-orphan", passive_deletes=True
@@ -49,6 +69,9 @@ class Monitor(BaseModel):
     )
     security_audits = relationship(
         "SecurityAudit", back_populates="monitor", cascade="all, delete-orphan", passive_deletes=True
+    )
+    incidents = relationship(
+        "Incident", back_populates="monitor", cascade="all, delete-orphan", passive_deletes=True
     )
 
     def to_dict(self) -> dict:
@@ -62,6 +85,9 @@ class Monitor(BaseModel):
             "is_active": self.is_active,
             "last_checked_at": self.last_checked_at.isoformat() if self.last_checked_at else None,
             "last_scanned_at": self.last_scanned_at.isoformat() if self.last_scanned_at else None,
+            "consecutive_failures": self.consecutive_failures,
+            "failure_threshold": self.failure_threshold,
+            "degraded_latency_ms": self.degraded_latency_ms,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
