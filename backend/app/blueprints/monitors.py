@@ -23,6 +23,19 @@ MAX_INTERVAL_SECONDS = 86_400
 MAX_TIMEOUT_SECONDS = 120
 
 
+def _clean_optional_float(value, *, field: str) -> float | None:
+    """Null clears the threshold; anything else must be a positive number."""
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise APIError(f"{field} must be a number or null", 422) from None
+    if number <= 0:
+        raise APIError(f"{field} must be greater than zero", 422)
+    return number
+
+
 def _parse_uuid(raw: str) -> uuid.UUID:
     try:
         return uuid.UUID(raw)
@@ -89,6 +102,16 @@ def create_monitor():
             default=10,
         ),
         is_active=bool(payload.get("is_active", True)),
+        failure_threshold=clean_int(
+            payload.get("failure_threshold"),
+            field="failure_threshold",
+            minimum=current_app.config["DEFAULT_FAILURE_THRESHOLD"],
+            maximum=10,
+            default=current_app.config["DEFAULT_FAILURE_THRESHOLD"],
+        ),
+        degraded_latency_ms=_clean_optional_float(
+            payload.get("degraded_latency_ms"), field="degraded_latency_ms"
+        ),
     )
     db.session.add(monitor)
     db.session.commit()
@@ -130,6 +153,18 @@ def update_monitor(monitor_id: str):
         )
     if "is_active" in payload:
         monitor.is_active = bool(payload["is_active"])
+    if "failure_threshold" in payload:
+        monitor.failure_threshold = clean_int(
+            payload["failure_threshold"],
+            field="failure_threshold",
+            minimum=current_app.config["DEFAULT_FAILURE_THRESHOLD"],
+            maximum=10,
+            default=monitor.failure_threshold,
+        )
+    if "degraded_latency_ms" in payload:
+        monitor.degraded_latency_ms = _clean_optional_float(
+            payload["degraded_latency_ms"], field="degraded_latency_ms"
+        )
 
     db.session.commit()
     return jsonify({"monitor": monitor.to_dict()})
@@ -235,3 +270,31 @@ def trigger_scan(monitor_id: str):
         raise APIError("Unknown scan kind", 422, {"allowed": ["ping", "full"]})
 
     return jsonify({"queued": True, "kind": kind, "task_id": async_result.id}), 202
+
+
+@monitors_bp.get("/<monitor_id>/incidents")
+@auth_required
+def list_monitor_incidents(monitor_id: str):
+    """Incident history for one monitor, with downtime totals."""
+    from app.models import Incident
+    from app.services.incidents import incident_summary
+
+    monitor = get_tenant_object_or_404(Monitor, _parse_uuid(monitor_id))
+    days = clean_int(request.args.get("days"), field="days", minimum=1, maximum=365, default=30)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    rows = (
+        db.session.query(Incident)
+        .filter(Incident.monitor_id == monitor.id, Incident.started_at >= since)
+        .order_by(Incident.started_at.desc())
+        .limit(200)
+        .all()
+    )
+    return jsonify(
+        {
+            "monitor_id": str(monitor.id),
+            "window_days": days,
+            "summary": incident_summary(monitor.id, since),
+            "incidents": [i.to_dict() for i in rows],
+        }
+    )
