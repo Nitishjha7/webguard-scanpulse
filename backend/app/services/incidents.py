@@ -8,8 +8,9 @@ State transitions, evaluated once per probe::
 
     UP        --(N consecutive failures)-->  DOWN
     UP        --(N consecutive slow)------>  DEGRADED
-    DEGRADED  --(N consecutive failures)-->  DOWN      (escalation)
-    DOWN      --(one success)------------->  RESOLVED
+    DEGRADED  --(N consecutive failures)-->  DOWN       (escalation)
+    DOWN      --(one success, slow)------->  DEGRADED   (de-escalation)
+    DOWN      --(one success, fast)------->  RESOLVED
     DEGRADED  --(one success, fast)------->  RESOLVED
 
 Recovery is deliberately asymmetric: opening needs a quorum, closing needs a
@@ -105,7 +106,21 @@ def _handle_success(monitor, probe, incident, now) -> dict:
         reason = f"latency {latency}ms exceeds {threshold}ms threshold"
 
         if incident is not None:
-            # Already open (DOWN or DEGRADED); slowness adds nothing new.
+            if incident.status is IncidentStatus.DOWN:
+                # The target is answering again, just slowly. Holding it DOWN
+                # would be wrong and — because every later slow probe takes this
+                # same branch — the incident would never clear at all.
+                incident.status = IncidentStatus.DEGRADED
+                incident.root_cause = reason
+                logger.warning(
+                    "monitor %s de-escalated DOWN -> DEGRADED: %s", monitor.name, reason
+                )
+                return {
+                    "transition": "deescalated",
+                    "status": "DEGRADED",
+                    "incident_id": str(incident.id),
+                }
+            # Already DEGRADED; another slow probe adds nothing new.
             return {"transition": None, "incident_id": str(incident.id)}
         if monitor.consecutive_degraded < monitor.failure_threshold:
             return {"transition": None, "incident_id": None, "below_quorum": True}
