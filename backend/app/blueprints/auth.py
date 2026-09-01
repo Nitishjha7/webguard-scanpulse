@@ -67,7 +67,7 @@ def register():
 @auth_bp.post("/login")
 def login():
     payload = require_fields(request.get_json(silent=True), "email", "password")
-    email = clean_email(payload["email"])
+    email = clean_email(payload["email"], allow_reserved=True)
 
     user = db.session.query(User).filter_by(email=email).first()
     # Same message either way, so the response cannot enumerate valid emails.
