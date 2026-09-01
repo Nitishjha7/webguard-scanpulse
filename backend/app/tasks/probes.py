@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
+from flask import current_app
 
 from app.engines import (
     audit_dns_posture,
@@ -18,7 +19,9 @@ from app.engines import (
     probe_http,
 )
 from app.extensions import db
-from app.models import Monitor, PingLog, SecurityAudit, SslScan
+from app.models import AlertEvent, Monitor, PingLog, SecurityAudit, SslScan
+from app.services import incidents
+from app.tasks.alerts import notify_incident, notify_ssl
 
 logger = logging.getLogger(__name__)
 
@@ -103,24 +106,32 @@ def run_ssl_scan(monitor_id: str) -> dict:
 
     result = inspect_ssl_certificate(parsed.hostname, parsed.port or 443, timeout=monitor.timeout_seconds)
 
-    db.session.add(
-        SslScan(
-            monitor_id=monitor.id,
-            org_id=monitor.org_id,
-            issuer=result.get("issuer"),
-            subject=result.get("subject"),
-            valid_from=_parse_dt(result.get("valid_from")),
-            valid_to=_parse_dt(result.get("valid_to")),
-            days_left=result.get("days_left"),
-            tls_version=result.get("tls_version"),
-            cipher=result.get("cipher"),
-            is_valid=bool(result.get("is_valid")),
-            verify_error=result.get("verify_error"),
-            error=result.get("error"),
-            payload=result,
-        )
+    previous = (
+        db.session.query(SslScan)
+        .filter(SslScan.monitor_id == monitor.id, SslScan.days_left.isnot(None))
+        .order_by(SslScan.created_at.desc())
+        .first()
     )
+
+    scan = SslScan(
+        monitor_id=monitor.id,
+        org_id=monitor.org_id,
+        issuer=result.get("issuer"),
+        subject=result.get("subject"),
+        valid_from=_parse_dt(result.get("valid_from")),
+        valid_to=_parse_dt(result.get("valid_to")),
+        days_left=result.get("days_left"),
+        tls_version=result.get("tls_version"),
+        cipher=result.get("cipher"),
+        is_valid=bool(result.get("is_valid")),
+        verify_error=result.get("verify_error"),
+        error=result.get("error"),
+        payload=result,
+    )
+    db.session.add(scan)
     db.session.commit()
+
+    _raise_ssl_alerts(scan, previous)
 
     logger.info(
         "ssl %s -> valid=%s days_left=%s tls=%s",
@@ -164,6 +175,42 @@ def run_security_scan(monitor_id: str) -> dict:
         dns_result.get("grade"),
     )
     return {"headers": headers, "dns": dns_result}
+
+
+def _raise_ssl_alerts(scan: SslScan, previous: SslScan | None) -> None:
+    """Alert on an invalid certificate, or on crossing an expiry threshold.
+
+    Threshold crossing is derived from the previous scan rather than stored
+    state: a mark fires only when it sits between the last reading and this one,
+    so passing 30 days does not then re-alert every day until 14.
+    """
+    if scan.error:
+        return  # Could not reach the host at all; the uptime probe owns that.
+
+    # verify_error means the chain itself failed — expired, self-signed, or
+    # issued for a different host. That is an alert on its own, not a countdown.
+    if scan.verify_error:
+        notify_ssl.delay(str(scan.id), AlertEvent.SSL_INVALID.value)
+        return
+
+    days = scan.days_left
+    if days is None:
+        return
+
+    thresholds = current_app.config["SSL_EXPIRY_THRESHOLDS"]
+    # No prior reading means treat every mark above the current value as newly
+    # crossed — a monitor added with a cert expiring in 5 days must alert now.
+    ceiling = previous.days_left if previous is not None else max(thresholds, default=0) + 1
+
+    crossed = [t for t in thresholds if days <= t < ceiling]
+    if crossed:
+        logger.warning(
+            "ssl expiry threshold crossed for %s: %s days left (marks %s)",
+            scan.monitor_id,
+            days,
+            crossed,
+        )
+        notify_ssl.delay(str(scan.id), AlertEvent.SSL_EXPIRING.value)
 
 
 def _registrable_domain(hostname: str) -> str:
