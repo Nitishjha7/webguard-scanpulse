@@ -26,16 +26,28 @@ frontend/src/             # React dashboard
 docs/                     # Architecture & setup docs
 ```
 
+## Quick Start (Docker)
+
+```bash
+cp .env.example .env
+docker compose up --build
+curl http://localhost:5000/health/ready
+```
+
+Everything runs in containers (Postgres 16, Redis 7, Flask API) - no local Python needed.
+Seed a demo tenant with `docker compose exec backend flask seed-demo`.
+
 ## Docs
 
 - [Architecture & Technical Specification](docs/architecture.md)
 - [Setup Steps](docs/setup.md)
+- [Phase 1 Notes & API Reference](docs/phase-1.md)
 
 ## Roadmap
 
 Development is split into 6 phases — see [docs/architecture.md](docs/architecture.md#5-phase-wise-implementation-roadmap--milestones) for full details:
 
-1. Core Scaffold, Multi-Tenancy & Models
+1. Core Scaffold, Multi-Tenancy & Models — **done** ([notes](docs/phase-1.md))
 2. Inspection Engines & Background Workers
 3. Quorum Alerting & Incident State Machine
 4. Synthetic E2E & Port Scanning
