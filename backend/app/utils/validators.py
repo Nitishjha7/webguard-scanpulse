@@ -15,20 +15,28 @@ def require_fields(payload: dict | None, *fields: str) -> dict:
     return payload
 
 
-def clean_email(raw: str, *, allow_reserved: bool = False) -> str:
-    """Normalise and validate an email address.
-
-    ``allow_reserved`` permits special-use domains (``.local``, ``.test``,
-    ``example.com``). Sign-up keeps them out, but *lookup* paths must accept
-    them: an account that already exists has to stay able to log in, and the
-    seeded demo admin lives at ``.local``.
-    """
+def clean_email(raw: str) -> str:
+    """Full validation, for sign-up paths. Rejects special-use domains."""
     try:
-        return validate_email(
-            raw, check_deliverability=False, test_environment=allow_reserved
-        ).normalized.lower()
+        return validate_email(raw, check_deliverability=False).normalized.lower()
     except EmailNotValidError as exc:
         raise APIError(f"Invalid email address: {exc}", 422) from exc
+
+
+def normalize_email_for_lookup(raw: str) -> str:
+    """Minimal normalisation for login.
+
+    Login must not apply the sign-up rules. Those rules reject special-use
+    domains such as ``.local`` — where the seeded demo admin lives — and they
+    tighten over time, so running them here would silently lock out accounts
+    that already exist. The lookup only needs the casing and whitespace
+    treatment that was applied on insert.
+    """
+    email = raw.strip().lower()
+    if "@" not in email or len(email) > 255:
+        # Same message as a wrong password, so this cannot enumerate accounts.
+        raise APIError("Invalid email or password", 401)
+    return email
 
 
 def clean_password(raw: str) -> str:

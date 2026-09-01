@@ -66,6 +66,10 @@ def _configure_logging(app: Flask) -> None:
     )
     app.logger.setLevel(level)
 
+    # These two dump every task signature at DEBUG, which buries the probe logs.
+    for noisy in ("celery.utils.functional", "amqp"):
+        logging.getLogger(noisy).setLevel(logging.INFO)
+
 
 def _init_extensions(app: Flask) -> None:
     db.init_app(app)
