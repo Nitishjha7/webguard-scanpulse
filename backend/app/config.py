@@ -39,6 +39,27 @@ class BaseConfig:
     MIN_INTERVAL_SECONDS = int(os.getenv("MIN_INTERVAL_SECONDS", "60"))
     MAX_MONITORS_PER_ORG = int(os.getenv("MAX_MONITORS_PER_ORG", "100"))
 
+    # --- Alerting (Phase 3) ----------------------------------------------
+    SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
+    ALERT_FROM_EMAIL = os.getenv("ALERT_FROM_EMAIL", "alerts@webguard.invalid")
+    ALERT_FROM_NAME = os.getenv("ALERT_FROM_NAME", "WebGuard ScanPulse")
+
+    #: Consecutive failed probes before an incident opens. One blip is not an
+    #: outage, so the floor is 2.
+    DEFAULT_FAILURE_THRESHOLD = max(2, int(os.getenv("DEFAULT_FAILURE_THRESHOLD", "2")))
+
+    #: Days-remaining marks that trigger a certificate expiry warning. Each
+    #: monitor is alerted at most once per mark, so crossing 30 does not then
+    #: re-alert every day until 14.
+    SSL_EXPIRY_THRESHOLDS = sorted(
+        (
+            int(d)
+            for d in os.getenv("SSL_EXPIRY_THRESHOLDS", "30,14,7,3,1").split(",")
+            if d.strip()
+        ),
+        reverse=True,
+    )
+
 
 class DevelopmentConfig(BaseConfig):
     DEBUG = True

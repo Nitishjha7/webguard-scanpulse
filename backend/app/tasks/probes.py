@@ -67,7 +67,18 @@ def run_probe(monitor_id: str, region: str = "default") -> dict:
     # Stamped even on failure, so a permanently broken target does not get
     # re-dispatched on every single beat tick.
     monitor.last_checked_at = datetime.now(timezone.utc)
+
+    # Fold this probe into the incident state machine inside the same
+    # transaction as the ping row, so the two can never disagree.
+    transition = incidents.evaluate(monitor, result)
     db.session.commit()
+
+    # Notify only after the commit: an alert about an incident that got rolled
+    # back is worse than one that arrives a moment late.
+    if transition.get("transition") in {"opened", "escalated", "resolved"}:
+        notify_incident.delay(transition["incident_id"], transition["transition"])
+
+    result["incident"] = transition
 
     logger.info(
         "probe %s %s -> up=%s status=%s %sms",
