@@ -9,6 +9,7 @@ import os
 from flask import Flask, jsonify
 
 from app.blueprints import register_blueprints
+from app.celery_app import make_celery
 from app.config import get_config
 from app.extensions import cors, db, jwt, migrate
 from app.utils.errors import register_error_handlers
@@ -27,6 +28,8 @@ def create_app(config_name: str | None = None) -> Flask:
     # Import models before Migrate reads metadata, so autogenerate sees every table.
     from app import models  # noqa: F401
 
+    _init_celery(app)
+
     register_tenant_context(app)
     register_blueprints(app)
     register_error_handlers(app)
@@ -44,6 +47,15 @@ def create_app(config_name: str | None = None) -> Flask:
         )
 
     return app
+
+
+def _init_celery(app: Flask) -> None:
+    """Build the Celery instance and import the task modules that register on it.
+
+    The web process needs this too: it is how ``.delay()`` reaches the broker.
+    """
+    app.extensions["celery"] = make_celery(app)
+    from app import tasks  # noqa: F401  - import registers every 
 
 
 def _configure_logging(app: Flask) -> None:
