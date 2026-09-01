@@ -1,6 +1,6 @@
 # Phase 1 — Core Scaffold, Multi-Tenancy & Models
 
-Branch: `feature/phase-1-flask-scaffold`
+Committed directly to `main` — single-developer workflow, no feature branches.
 
 Everything runs in Docker. No local Python or Postgres install is required.
 
