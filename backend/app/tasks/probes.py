@@ -78,7 +78,7 @@ def run_probe(monitor_id: str, region: str = "default") -> dict:
 
     # Notify only after the commit: an alert about an incident that got rolled
     # back is worse than one that arrives a moment late.
-    if transition.get("transition") in {"opened", "escalated", "resolved"}:
+    if transition.get("transition") in {"opened", "escalated", "deescalated", "resolved"}:
         notify_incident.delay(transition["incident_id"], transition["transition"])
 
     result["incident"] = transition
