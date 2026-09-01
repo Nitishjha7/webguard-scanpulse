@@ -61,6 +61,59 @@ services:
       retries: 5
       start_period: 30s
 
+  worker:
+    build:
+      context: .
+      dockerfile: celery_worker/Dockerfile
+    image: webguard-worker
+    container_name: webguard-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-webguard}:${POSTGRES_PASSWORD:-webguard}@postgres:5432/${POSTGRES_DB:-webguard}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    command: ["celery", "-A", "celery_main:celery", "worker", "--loglevel=info", "--queues=probes,scans", "--concurrency=4"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A celery_main:celery inspect ping | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
+
+  beat:
+    build:
+      context: .
+      dockerfile: celery_worker/Dockerfile
+    image: webguard-worker
+    container_name: webguard-beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-webguard}:${POSTGRES_PASSWORD:-webguard}@postgres:5432/${POSTGRES_DB:-webguard}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+      - beat_state:/var/lib/celery
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    # Exactly one beat process may run, or every schedule fires twice.
+    command: ["celery", "-A", "celery_main:celery", "beat", "--loglevel=info", "--schedule=/var/lib/celery/beat-schedule"]
+
 volumes:
   postgres_data:
   redis_data:
+  beat_state:
