@@ -16,7 +16,12 @@ from app.extensions import db
 from app.models import Organization, User, UserRole
 from app.utils.errors import APIError
 from app.utils.tenancy import auth_required, current_user, roles_required
-from app.utils.validators import clean_email, clean_password, require_fields
+from app.utils.validators import (
+    clean_email,
+    clean_password,
+    normalize_email_for_lookup,
+    require_fields,
+)
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -67,7 +72,7 @@ def register():
 @auth_bp.post("/login")
 def login():
     payload = require_fields(request.get_json(silent=True), "email", "password")
-    email = clean_email(payload["email"], allow_reserved=True)
+    email = normalize_email_for_lookup(payload["email"])
 
     user = db.session.query(User).filter_by(email=email).first()
     # Same message either way, so the response cannot enumerate valid emails.
