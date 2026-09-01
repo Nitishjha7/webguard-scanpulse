@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import sqlalchemy as sa
 from flask import Blueprint, current_app, jsonify, request
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import Monitor, PingLog, SecurityAudit, SslScan, UserRole
@@ -134,7 +135,17 @@ def update_monitor(monitor_id: str):
     if "name" in payload:
         monitor.name = str(payload["name"]).strip()
     if "url" in payload:
-        monitor.url = clean_monitor_url(payload["url"])
+        new_url = clean_monitor_url(payload["url"])
+        # Same duplicate check create() does — without it the unique constraint
+        # surfaces as a 500 instead of a 409.
+        clash = (
+            tenant_query(Monitor)
+            .filter(Monitor.url == new_url, Monitor.id != monitor.id)
+            .first()
+        )
+        if clash is not None:
+            raise APIError("This URL is already monitored by your organization", 409)
+        monitor.url = new_url
     if "interval_seconds" in payload:
         monitor.interval_seconds = clean_int(
             payload["interval_seconds"],
@@ -166,7 +177,14 @@ def update_monitor(monitor_id: str):
             payload["degraded_latency_ms"], field="degraded_latency_ms"
         )
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Backstop for a concurrent writer slipping in between the check above
+        # and this commit.
+        db.session.rollback()
+        raise APIError("This URL is already monitored by your organization", 409) from None
+
     return jsonify({"monitor": monitor.to_dict()})
 
 
