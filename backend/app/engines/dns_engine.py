@@ -5,14 +5,22 @@ A DMARC record with ``p=none`` is monitoring-only and does not stop spoofing,
 so it scores far below ``p=reject`` — presence alone is not protection.
 """
 import logging
+import os
 
 import dns.exception
+import dns.flags
 import dns.rdatatype
 import dns.resolver
 
 logger = logging.getLogger(__name__)
 
 DNS_TIMEOUT = 5.0
+
+#: Query public recursive resolvers directly rather than whatever
+#: /etc/resolv.conf points at. Inside Docker that is the embedded resolver at
+#: 127.0.0.11, which does not proxy CAA or DNSKEY at all and returns NoAnswer
+#: for apex TXT - every posture check would silently score zero.
+DEFAULT_RESOLVERS = ("1.1.1.1", "8.8.8.8", "9.9.9.9")
 
 DMARC_POLICY_POINTS = {"reject": 35, "quarantine": 25, "none": 10}
 SPF_ALL_POINTS = {"-all": 30, "~all": 22, "?all": 8, "+all": 0}
@@ -21,9 +29,16 @@ GRADE_THRESHOLDS = ((90, "A+"), (80, "A"), (65, "B"), (50, "C"), (30, "D"))
 
 
 def _resolver() -> dns.resolver.Resolver:
-    resolver = dns.resolver.Resolver()
+    resolver = dns.resolver.Resolver(configure=False)
+    configured = os.getenv("DNS_RESOLVERS", "")
+    resolver.nameservers = [
+        ip.strip() for ip in configured.split(",") if ip.strip()
+    ] or list(DEFAULT_RESOLVERS)
     resolver.timeout = DNS_TIMEOUT
-    resolver.lifetime = DNS_TIMEOUT
+    # lifetime covers retries across every nameserver, so give it room for one
+    # resolver to time out before the next is tried.
+    resolver.lifetime = DNS_TIMEOUT * len(resolver.nameservers)
+    resolver.use_edns(0, dns.flags.DO, 4096)
     return resolver
 
 

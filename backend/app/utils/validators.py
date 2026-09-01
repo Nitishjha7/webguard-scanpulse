@@ -15,9 +15,18 @@ def require_fields(payload: dict | None, *fields: str) -> dict:
     return payload
 
 
-def clean_email(raw: str) -> str:
+def clean_email(raw: str, *, allow_reserved: bool = False) -> str:
+    """Normalise and validate an email address.
+
+    ``allow_reserved`` permits special-use domains (``.local``, ``.test``,
+    ``example.com``). Sign-up keeps them out, but *lookup* paths must accept
+    them: an account that already exists has to stay able to log in, and the
+    seeded demo admin lives at ``.local``.
+    """
     try:
-        return validate_email(raw, check_deliverability=False).normalized.lower()
+        return validate_email(
+            raw, check_deliverability=False, test_environment=allow_reserved
+        ).normalized.lower()
     except EmailNotValidError as exc:
         raise APIError(f"Invalid email address: {exc}", 422) from exc
 
