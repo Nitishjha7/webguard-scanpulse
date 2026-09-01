@@ -1,6 +1,6 @@
 # Phase 2 — Inspection Engines & Background Workers
 
-Branch: `feature/phase-2-scan-engines`
+Committed directly to `main` — single-developer workflow, no feature branches.
 
 ## What shipped
 
