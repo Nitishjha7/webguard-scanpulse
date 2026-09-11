@@ -17,6 +17,7 @@ from app.engines import (
     audit_security_headers,
     inspect_ssl_certificate,
     probe_http,
+    scan_ports,
 )
 from app.extensions import db
 from app.models import AlertEvent, Monitor, PingLog, SecurityAudit, SslScan
@@ -144,7 +145,7 @@ def run_ssl_scan(monitor_id: str) -> dict:
 
 
 def run_security_scan(monitor_id: str) -> dict:
-    """Header audit + DNS posture in one row of ``security_audits``."""
+    """Header audit + DNS posture + exposed-port scan, in one ``security_audits`` row."""
     monitor = _load_monitor(monitor_id)
     if monitor is None:
         return {"skipped": "monitor not found"}
@@ -152,6 +153,7 @@ def run_security_scan(monitor_id: str) -> dict:
     headers = audit_security_headers(monitor.url, timeout=monitor.timeout_seconds)
     hostname = urlparse(monitor.url).hostname or ""
     dns_result = audit_dns_posture(_registrable_domain(hostname))
+    ports = scan_ports(hostname) if hostname else {"ok": False, "error": "no hostname"}
 
     audit = SecurityAudit(
         monitor_id=monitor.id,
@@ -160,8 +162,11 @@ def run_security_scan(monitor_id: str) -> dict:
         grade=headers.get("grade", "F"),
         dns_score=dns_result.get("score"),
         dns_grade=dns_result.get("grade"),
+        port_score=ports.get("score") if ports.get("ok") else None,
+        port_grade=ports.get("grade") if ports.get("ok") else None,
         headers_payload=headers,
         dns_payload=dns_result,
+        open_ports=ports,
         error=headers.get("error") or dns_result.get("error"),
     )
     db.session.add(audit)
@@ -169,12 +174,13 @@ def run_security_scan(monitor_id: str) -> dict:
     db.session.commit()
 
     logger.info(
-        "security %s -> headers=%s dns=%s",
+        "security %s -> headers=%s dns=%s ports=%s",
         monitor.url,
         headers.get("grade"),
         dns_result.get("grade"),
+        ports.get("grade") if ports.get("ok") else "n/a",
     )
-    return {"headers": headers, "dns": dns_result}
+    return {"headers": headers, "dns": dns_result, "ports": ports}
 
 
 def _raise_ssl_alerts(scan: SslScan, previous: SslScan | None) -> None:

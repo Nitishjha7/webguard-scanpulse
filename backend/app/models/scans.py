@@ -123,10 +123,7 @@ class SslScan(BaseModel):
 
 
 class SecurityAudit(BaseModel):
-    """Combined HTTP-header and DNS-posture audit for one monitor.
-
-    ``open_ports`` stays null until the Phase 4 port scanner fills it.
-    """
+    """Combined HTTP-header, DNS-posture and exposed-port audit for one monitor."""
 
     __tablename__ = "security_audits"
     __table_args__ = (
@@ -140,6 +137,8 @@ class SecurityAudit(BaseModel):
     grade: Mapped[str] = mapped_column(sa.String(2), nullable=False, default="F")
     dns_score: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
     dns_grade: Mapped[str | None] = mapped_column(sa.String(2), nullable=True)
+    port_score: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    port_grade: Mapped[str | None] = mapped_column(sa.String(2), nullable=True)
 
     headers_payload: Mapped[dict | None] = mapped_column(JSONColumn, nullable=True)
     dns_payload: Mapped[dict | None] = mapped_column(JSONColumn, nullable=True)
@@ -156,6 +155,8 @@ class SecurityAudit(BaseModel):
             "grade": self.grade,
             "dns_score": self.dns_score,
             "dns_grade": self.dns_grade,
+            "port_score": self.port_score,
+            "port_grade": self.port_grade,
             "headers": self.headers_payload,
             "dns": self.dns_payload,
             "open_ports": self.open_ports,

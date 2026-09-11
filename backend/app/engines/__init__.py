@@ -11,6 +11,7 @@ only for programmer error.
 from app.engines.dns_engine import audit_dns_posture
 from app.engines.header_engine import audit_security_headers
 from app.engines.http_probe import probe_http
+from app.engines.port_scanner import scan_ports
 from app.engines.ssl_engine import inspect_ssl_certificate
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "audit_security_headers",
     "probe_http",
     "inspect_ssl_certificate",
+    "scan_ports",
 ]
