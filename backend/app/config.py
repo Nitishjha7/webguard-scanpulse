@@ -68,8 +68,20 @@ class DevelopmentConfig(BaseConfig):
 
 class TestingConfig(BaseConfig):
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URL", "sqlite:///:memory:")
-    SQLALCHEMY_ENGINE_OPTIONS = {}
+
+    # Postgres, not SQLite. The schema and several queries are Postgres-specific
+    # — JSONB columns, the partial unique index that guards against duplicate
+    # incidents, make_interval() in the beat dispatcher — so a SQLite test run
+    # would pass while the real thing breaks.
+    SQLALCHEMY_DATABASE_URI = os.getenv(
+        "TEST_DATABASE_URL",
+        "postgresql+psycopg2://webguard:webguard@postgres:5432/webguard_test",
+    )
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+
+    JWT_SECRET_KEY = "testing-only-key-at-least-32-bytes-long!!"
+    SENDGRID_API_KEY = "SG.testing-only"
+    ALERT_FROM_EMAIL = "alerts@webguard.test"
 
 
 class ProductionConfig(BaseConfig):

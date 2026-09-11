@@ -1,0 +1,5 @@
+# Test-only dependencies. Kept out of requirements.txt so a production image
+# built with --build-arg INSTALL_DEV=false does not ship them.
+pytest==8.3.2
+pytest-cov==5.0.0
+responses==0.25.3

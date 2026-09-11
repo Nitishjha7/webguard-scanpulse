@@ -92,7 +92,9 @@ class SslScan(BaseModel):
     subject: Mapped[str | None] = mapped_column(sa.String(512), nullable=True)
     valid_from: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     valid_to: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
-    days_left: Mapped[int | None] = mapped_column(sa.Integer, nullable=True, index=True)
+    # Indexed via __table_args__ above — `index=True` here would declare the
+    # same index name a second time and break create_all().
+    days_left: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
     tls_version: Mapped[str | None] = mapped_column(sa.String(16), nullable=True)
     cipher: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
     is_valid: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)

@@ -12,8 +12,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+ARG INSTALL_DEV=true
+
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt \
+    && if [ "$INSTALL_DEV" = "true" ]; then pip install -r requirements-dev.txt; fi
 
 COPY . .
 
