@@ -24,6 +24,9 @@ class Organization(BaseModel):
     notification_channels = relationship(
         "NotificationChannel", back_populates="organization", cascade="all, delete-orphan"
     )
+    synthetic_checks = relationship(
+        "SyntheticCheck", back_populates="organization", cascade="all, delete-orphan"
+    )
 
     @staticmethod
     def slugify(value: str) -> str:

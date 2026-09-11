@@ -1,0 +1,3 @@
+# Worker-only dependencies. Playwright pulls a ~500MB Chromium build, which has
+# no business in the API image — only the worker ever drives a browser.
+playwright==1.47.0

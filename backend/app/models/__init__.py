@@ -12,6 +12,7 @@ from app.models.notification import (
 )
 from app.models.organization import Organization
 from app.models.scans import PingLog, SecurityAudit, SslScan
+from app.models.synthetic import RunStatus, SyntheticCheck, SyntheticRun, redact_steps
 from app.models.user import WRITE_ROLES, User, UserRole
 
 __all__ = [
@@ -34,4 +35,8 @@ __all__ = [
     "ChannelType",
     "AlertEvent",
     "DEFAULT_EVENTS",
+    "SyntheticCheck",
+    "SyntheticRun",
+    "RunStatus",
+    "redact_steps",
 ]

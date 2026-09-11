@@ -49,11 +49,19 @@ def _ensure_database(application) -> None:
 
 @pytest.fixture(autouse=True)
 def clean_tables(app):
-    """Wipe every table after each test so cases cannot leak into each other."""
+    """Wipe every table after each test so cases cannot leak into each other.
+
+    DELETE rather than TRUNCATE. The tables hold a handful of rows each, and
+    TRUNCATE takes an ACCESS EXCLUSIVE lock and rewrites files — across a few
+    hundred tests that alone cost minutes. Deleting in reverse dependency order
+    keeps the foreign keys happy without needing CASCADE.
+    """
     yield
     _db.session.rollback()
-    tables = ",".join(f'"{t.name}"' for t in reversed(_db.metadata.sorted_tables))
-    _db.session.execute(sa.text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+    statements = ";".join(
+        f'DELETE FROM "{t.name}"' for t in reversed(_db.metadata.sorted_tables)
+    )
+    _db.session.connection().exec_driver_sql(statements)
     _db.session.commit()
     _db.session.remove()
 

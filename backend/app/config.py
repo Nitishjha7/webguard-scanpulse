@@ -48,6 +48,10 @@ class BaseConfig:
     #: outage, so the floor is 2.
     DEFAULT_FAILURE_THRESHOLD = max(2, int(os.getenv("DEFAULT_FAILURE_THRESHOLD", "2")))
 
+    #: Where synthetic-run screenshots are written. A Docker volume shared
+    #: read-only with the API, which serves them.
+    ARTIFACTS_DIR = os.getenv("ARTIFACTS_DIR", "/app/artifacts")
+
     #: Days-remaining marks that trigger a certificate expiry warning. Each
     #: monitor is alerted at most once per mark, so crossing 30 does not then
     #: re-alert every day until 14.

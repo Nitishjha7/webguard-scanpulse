@@ -47,6 +47,8 @@ services:
     volumes:
       # Live reload during development; drop this line for a production image.
       - ./backend:/app
+      # Read-only: the worker writes synthetic screenshots, the API only serves them.
+      - artifacts:/app/artifacts:ro
     ports:
       - "${BACKEND_PORT:-5000}:5000"
     depends_on:
@@ -75,6 +77,7 @@ services:
       REDIS_URL: redis://redis:6379/0
     volumes:
       - ./backend:/app
+      - artifacts:/app/artifacts
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,7 +85,7 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
-    command: ["celery", "-A", "celery_main:celery", "worker", "--loglevel=info", "--queues=probes,scans", "--concurrency=4"]
+    command: ["celery", "-A", "celery_main:celery", "worker", "--loglevel=info", "--queues=probes,scans,synthetic", "--concurrency=4"]
     healthcheck:
       test: ["CMD-SHELL", "celery -A celery_main:celery inspect ping | grep -q pong"]
       interval: 30s
@@ -117,3 +120,4 @@ volumes:
   postgres_data:
   redis_data:
   beat_state:
+  artifacts:

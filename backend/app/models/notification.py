@@ -22,6 +22,8 @@ class AlertEvent(str, enum.Enum):
     INCIDENT_RESOLVED = "incident.resolved"
     SSL_EXPIRING = "ssl.expiring"
     SSL_INVALID = "ssl.invalid"
+    SYNTHETIC_FAILED = "synthetic.failed"
+    SYNTHETIC_RECOVERED = "synthetic.recovered"
 
 
 DEFAULT_EVENTS = [e.value for e in AlertEvent]

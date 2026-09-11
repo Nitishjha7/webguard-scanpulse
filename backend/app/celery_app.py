@@ -44,11 +44,22 @@ def make_celery(flask_app) -> Celery:
         # A probe that outlives its own interval is useless — kill it.
         task_soft_time_limit=120,
         task_time_limit=180,
+        # A full browser journey legitimately outlives an HTTP probe budget.
+        task_annotations={
+            "webguard.run_synthetic_check": {
+                "soft_time_limit": 180,
+                "time_limit": 240,
+            },
+        },
         result_expires=timedelta(hours=6),
         broker_connection_retry_on_startup=True,
         task_routes={
             "webguard.probe_monitor": {"queue": "probes"},
             "webguard.scan_monitor_security": {"queue": "scans"},
+            "webguard.scan_monitor_ssl": {"queue": "scans"},
+            # Browser runs are slow and memory-hungry; their own queue keeps a
+            # backlog of journeys from delaying uptime checks.
+            "webguard.run_synthetic_check": {"queue": "synthetic"},
         },
         task_default_queue="probes",
         beat_schedule={
@@ -59,6 +70,14 @@ def make_celery(flask_app) -> Celery:
             "dispatch-daily-security-scans": {
                 "task": "webguard.dispatch_due_security_scans",
                 "schedule": 3600.0,
+            },
+            "dispatch-due-synthetic-checks": {
+                "task": "webguard.dispatch_due_synthetic_checks",
+                "schedule": 60.0,
+            },
+            "prune-synthetic-runs": {
+                "task": "webguard.prune_synthetic_runs",
+                "schedule": 86_400.0,
             },
         },
     )

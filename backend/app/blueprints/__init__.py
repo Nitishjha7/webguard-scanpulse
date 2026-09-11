@@ -6,6 +6,7 @@ from app.blueprints.channels import channels_bp
 from app.blueprints.health import health_bp
 from app.blueprints.incidents import incidents_bp
 from app.blueprints.monitors import monitors_bp
+from app.blueprints.synthetic import synthetic_bp
 
 API_PREFIX = "/api/v1"
 
@@ -16,3 +17,4 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(monitors_bp, url_prefix=f"{API_PREFIX}/monitors")
     app.register_blueprint(incidents_bp, url_prefix=f"{API_PREFIX}/incidents")
     app.register_blueprint(channels_bp, url_prefix=f"{API_PREFIX}/channels")
+    app.register_blueprint(synthetic_bp, url_prefix=f"{API_PREFIX}/synthetic")
