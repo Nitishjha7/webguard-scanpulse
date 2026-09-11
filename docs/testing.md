@@ -1,6 +1,6 @@
 # Testing
 
-172 tests, ~78% line coverage across `backend/app`.
+253 tests, ~74% line coverage across `backend/app`. The whole suite runs in about 30 seconds.
 
 ## Running them
 
@@ -30,10 +30,14 @@ Postgres-specific.
 
 A SQLite run would pass while the real thing broke.
 
-Tables are truncated between tests rather than wrapped in a rolled-back
+Tables are emptied between tests rather than wrapped in a rolled-back
 transaction. The incident state machine calls `session.rollback()` itself when
 it loses an insert race; inside an enclosing test transaction that would
 silently discard the test's own data and make a failure look like a pass.
+
+The cleanup uses DELETE, not TRUNCATE. The tables hold a handful of rows each,
+and TRUNCATE takes an ACCESS EXCLUSIVE lock and rewrites files — across the
+whole suite that alone cost about three and a half minutes.
 
 ## What is covered
 
@@ -47,10 +51,14 @@ silently discard the test's own data and make a failure look like a pass.
 | `test_scheduling_and_alerts.py` | Beat dispatch windows, SSL expiry threshold crossing |
 | `test_monitors_api.py` | Validation, quotas, duplicate URLs, ping/incident read endpoints |
 | `test_probe_and_formatting.py` | Probe status classification, failure modes, alert message shape |
+| `test_port_scanner.py` | SSRF refusal, port selection, severity weighting |
+| `test_synthetic_dsl.py` | Step validation, the closed action vocabulary, secret masking |
+| `test_synthetic_api.py` | Journey CRUD, the secret round-trip, failure-state folding |
 
-Network calls are stubbed with `responses`, and DNS is patched where the SSRF
-guard would otherwise resolve a test hostname for real. No test needs the
-internet.
+Network calls are stubbed with `responses`, the socket layer is stubbed for the
+port scanner, and DNS is patched where the SSRF guard would otherwise resolve a
+test hostname for real. No test needs the internet, and no test launches a
+browser.
 
 ## Regression tests
 
@@ -77,3 +85,9 @@ name twice — once via `index=True` and once in `__table_args__` — which brok
   indirectly; the handshake itself is verified against live hosts by hand.
 - `app/engines/dns_engine.py` (54%) — the scoring functions are fully covered;
   the resolver plumbing is not.
+- `app/engines/synthetic.py` (40%) and `app/tasks/synthetic.py` (34%) — the
+  step DSL, its validator and the failure-state folding are fully covered; the
+  code that actually drives Chromium is not. Exercising it needs a browser and
+  a controlled page, so it is verified by hand against real Chromium: a passing
+  journey, an assertion failure, a selector timeout, and a page redirecting to
+  the cloud metadata endpoint (blocked by the route handler).
