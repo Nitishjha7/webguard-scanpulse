@@ -37,6 +37,12 @@ curl http://localhost:5000/health/ready
 Everything runs in containers (Postgres 16, Redis 7, Flask API) - no local Python needed.
 Seed a demo tenant with `docker compose exec backend flask seed-demo`.
 
+Run the test suite with:
+
+```bash
+docker compose exec -e FLASK_ENV=testing backend pytest
+```
+
 ## Docs
 
 - [Architecture & Technical Specification](docs/architecture.md)
@@ -44,6 +50,7 @@ Seed a demo tenant with `docker compose exec backend flask seed-demo`.
 - [Phase 1 Notes & API Reference](docs/phase-1.md)
 - [Phase 2 Notes: Engines & Workers](docs/phase-2.md)
 - [Phase 3 Notes: Incidents & Alerting](docs/phase-3.md)
+- [Testing](docs/testing.md)
 
 ## Roadmap
 
