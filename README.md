@@ -51,6 +51,7 @@ docker compose exec -e FLASK_ENV=testing backend pytest
 - [Phase 2 Notes: Engines & Workers](docs/phase-2.md)
 - [Phase 3 Notes: Incidents & Alerting](docs/phase-3.md)
 - [Phase 4 Notes: Synthetic & Port Scanning](docs/phase-4.md)
+- [Phase 5 Notes: Partitioning, Rollups & Status Pages](docs/phase-5.md)
 - [Testing](docs/testing.md)
 
 ## Roadmap
@@ -61,5 +62,5 @@ Development is split into 6 phases — see [docs/architecture.md](docs/architect
 2. Inspection Engines & Background Workers — **done** ([notes](docs/phase-2.md))
 3. Quorum Alerting & Incident State Machine — **done** ([notes](docs/phase-3.md))
 4. Synthetic E2E & Port Scanning — **done** ([notes](docs/phase-4.md))
-5. Time-Series Optimization & Public Status Pages
+5. Time-Series Optimization & Public Status Pages — **done** ([notes](docs/phase-5.md))
 6. React Dashboard, Visualization & Dockerization

@@ -1,6 +1,6 @@
 # Testing
 
-253 tests, ~74% line coverage across `backend/app`. The whole suite runs in about 30 seconds.
+307 tests, ~78% line coverage across `backend/app`. The whole suite runs in about 35 seconds.
 
 ## Running them
 
@@ -27,6 +27,10 @@ Postgres-specific.
   untested
 - `make_interval()` in the beat dispatcher, which computes a per-row deadline
 - `extract('epoch', …)` in the incident summary
+- **declarative range partitioning** on `ping_logs`, which has no SQLite
+  equivalent at all
+- `percentile_cont(...) WITHIN GROUP` and `ON CONFLICT DO UPDATE` in the
+  downsampling upserts
 
 A SQLite run would pass while the real thing broke.
 
@@ -54,6 +58,8 @@ whole suite that alone cost about three and a half minutes.
 | `test_port_scanner.py` | SSRF refusal, port selection, severity weighting |
 | `test_synthetic_dsl.py` | Step validation, the closed action vocabulary, secret masking |
 | `test_synthetic_api.py` | Journey CRUD, the secret round-trip, failure-state folding |
+| `test_partitions_and_rollups.py` | Partition routing, retention drops, idempotent downsampling |
+| `test_status_pages.py` | What a public page must *not* disclose, and unknown-vs-operational |
 
 Network calls are stubbed with `responses`, the socket layer is stubbed for the
 port scanner, and DNS is patched where the SSRF guard would otherwise resolve a
