@@ -71,10 +71,17 @@ below the icon and label, so a two-line label like "Avg. Security Grade" costs
 nothing. An earlier version put the number beside the label, which squeezed
 both into "Avg. Securi…" style truncation under the sparkline's width.
 
-**The lighthouse artwork is optional.** `HeroBanner` and `Login` try to load
-`/assets/hero-lighthouse.jpg` / `/assets/lighthouse-portrait.jpg` and fall back
-to a hand-drawn SVG scene (`LighthouseScene.jsx`) on a 404. Dropping a real
-photo in later requires no code change.
+**The lighthouse artwork degrades gracefully.** `HeroBanner`, `Login` and
+`Sidebar` load `/assets/hero-lighthouse.jpg`, `/assets/lighthouse-portrait.jpg`
+and `/assets/sidebar-lighthouse.jpg` respectively; `HeroBanner` and `Login`
+fall back to a hand-drawn SVG scene (`LighthouseScene.jsx`) if the file 404s,
+so the pages never break if an asset goes missing. The sidebar's copy is
+nearly full-opacity rather than faded — the source image is already a
+near-black night scene, so a low-opacity treatment (the first attempt) made it
+indistinguishable from the plain navy background. It is also positioned
+`left center` rather than `center`: the shield mark and the lit lighthouse
+both sit at the image's left edge, and a 232px-wide sidebar centered on a much
+taller portrait image crops both of them out entirely.
 
 ## Verified against a live stack
 

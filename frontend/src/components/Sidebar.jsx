@@ -30,8 +30,24 @@ export default function Sidebar({ health }) {
   const healthy = health?.status === "ok";
 
   return (
-    <aside className="hidden lg:flex w-[232px] shrink-0 flex-col bg-navy-900 text-white">
-      <div className="flex items-center gap-2.5 px-5 pt-6 pb-7">
+    <aside className="relative hidden lg:flex w-[232px] shrink-0 flex-col overflow-hidden bg-navy-900 text-white">
+      {/* Lighthouse artwork. The source image is already near-black navy —
+          the shield mark and the lit lighthouse sit at its left edge — so it
+          runs at near-full opacity, positioned left rather than centered, or
+          a 232px sidebar crops both landmarks out of a much taller portrait
+          image. Only a light top/bottom fade keeps the very edges — where the
+          logo row and the status footer sit — reliably legible. */}
+      <div
+        className="absolute inset-0 bg-cover opacity-90"
+        style={{ backgroundImage: "url(/assets/sidebar-lighthouse.jpg)", backgroundPosition: "left center" }}
+        aria-hidden="true"
+      />
+      <div
+        className="absolute inset-0 bg-gradient-to-b from-navy-900/90 via-transparent to-navy-900/90"
+        aria-hidden="true"
+      />
+
+      <div className="relative z-10 flex items-center gap-2.5 px-5 pt-6 pb-7">
         <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 shadow-lift">
           <Shield size={20} className="text-white" />
         </span>
@@ -41,7 +57,7 @@ export default function Sidebar({ health }) {
         </span>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3">
+      <nav className="relative z-10 flex-1 space-y-1 px-3">
         {NAV.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
@@ -60,7 +76,7 @@ export default function Sidebar({ health }) {
       {/* The promo card from the design. Decorative, so it is hidden from
           assistive tech rather than read out as a stray heading. */}
       <div
-        className="relative mx-3 mb-4 overflow-hidden rounded-xl bg-navy-800 p-4 ring-1 ring-white/5"
+        className="relative z-10 mx-3 mb-4 overflow-hidden rounded-xl bg-navy-800 p-4 ring-1 ring-white/5"
         aria-hidden="true"
       >
         <p className="relative z-10 text-[13px] font-semibold leading-snug text-slate-200">
@@ -83,7 +99,7 @@ export default function Sidebar({ health }) {
         </span>
       </div>
 
-      <div className="space-y-1.5 px-5 pb-5 text-[11px] text-slate-500">
+      <div className="relative z-10 space-y-1.5 px-5 pb-5 text-[11px] text-slate-500">
         <p>v1.0.0</p>
         <p className="flex items-center gap-1.5">
           <span
