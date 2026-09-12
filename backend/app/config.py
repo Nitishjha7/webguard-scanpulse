@@ -48,6 +48,11 @@ class BaseConfig:
     #: outage, so the floor is 2.
     DEFAULT_FAILURE_THRESHOLD = max(2, int(os.getenv("DEFAULT_FAILURE_THRESHOLD", "2")))
 
+    #: Raw probes keep full resolution for this long, then condense into hourly
+    #: buckets; hourly buckets condense into daily ones after the second window.
+    RAW_RETENTION_DAYS = int(os.getenv("RAW_RETENTION_DAYS", "7"))
+    HOURLY_RETENTION_DAYS = int(os.getenv("HOURLY_RETENTION_DAYS", "90"))
+
     #: Where synthetic-run screenshots are written. A Docker volume shared
     #: read-only with the API, which serves them.
     ARTIFACTS_DIR = os.getenv("ARTIFACTS_DIR", "/app/artifacts")

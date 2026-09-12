@@ -1,0 +1,172 @@
+{# Public status page. Rendered for anonymous visitors.
+
+   Everything this template can show is assembled by app.services.status, which
+   is the disclosure boundary — nothing not built there can leak from here.
+   Jinja2 autoescaping is on, so tenant-supplied text is escaped by default. #}
+<!doctype html>
+<html lang="en" data-overall="{{ data.overall }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ data.page.name }} — Status</title>
+{# Public page with no third-party assets: no CDN, no fonts, no analytics. One
+   fewer party who learns that a visitor is checking on an outage. #}
+<style>
+  :root {
+    --bg: #f7f8fa; --card: #ffffff; --text: #1a1d21; --muted: #6b7280;
+    --line: #e5e7eb;
+    --ok: #2ea043; --degraded: #f7a501; --down: #d13438; --unknown: #9ca3af;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --card: #171a1f; --text: #e8eaed; --muted: #9aa1ab;
+      --line: #272b31;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 64px; }
+  header h1 { margin: 0 0 4px; font-size: 24px; }
+  header p { margin: 0; color: var(--muted); }
+
+  .banner {
+    margin: 24px 0 28px; padding: 18px 20px; border-radius: 10px;
+    background: var(--card); border: 1px solid var(--line);
+    border-left: 4px solid var(--unknown);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .banner strong { font-size: 17px; }
+  [data-overall="operational"] .banner { border-left-color: var(--ok); }
+  [data-overall="degraded"]    .banner { border-left-color: var(--degraded); }
+  [data-overall="down"]        .banner { border-left-color: var(--down); }
+
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--unknown); flex: none; }
+  .dot.operational { background: var(--ok); }
+  .dot.degraded    { background: var(--degraded); }
+  .dot.down        { background: var(--down); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px 20px; margin-bottom: 12px;
+  }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row .name { font-weight: 600; }
+  .row .pct { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .url { color: var(--muted); font-size: 13px; margin: 2px 0 0 20px; word-break: break-all; }
+
+  /* Uptime bars. A flex row of equal-width columns scales to any history
+     length without per-bar width arithmetic in the template. */
+  .bars { display: flex; gap: 2px; margin-top: 12px; height: 32px; }
+  .bars i {
+    flex: 1 1 0; min-width: 2px; border-radius: 2px;
+    background: var(--unknown); opacity: .35;
+  }
+  .bars i.ok       { background: var(--ok);       opacity: 1; }
+  .bars i.partial  { background: var(--degraded); opacity: 1; }
+  .bars i.bad      { background: var(--down);     opacity: 1; }
+  .scale {
+    display: flex; justify-content: space-between;
+    color: var(--muted); font-size: 12px; margin-top: 6px;
+  }
+
+  h2 { font-size: 16px; margin: 32px 0 12px; }
+  .incident { display: flex; gap: 10px; align-items: baseline; }
+  .incident .when { color: var(--muted); font-size: 13px; margin-left: auto; white-space: nowrap; }
+  .badge {
+    font-size: 11px; font-weight: 600; letter-spacing: .03em;
+    padding: 2px 7px; border-radius: 4px; color: #fff; background: var(--unknown);
+  }
+  .badge.DOWN { background: var(--down); }
+  .badge.DEGRADED { background: var(--degraded); }
+  .badge.RESOLVED { background: var(--ok); }
+
+  footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
+  footer a { color: inherit; }
+  .empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>{{ data.page.name }}</h1>
+    {% if data.page.headline %}<p>{{ data.page.headline }}</p>{% endif %}
+  </header>
+
+  <div class="banner">
+    <span class="dot {{ data.overall }}"></span>
+    <strong>
+      {% if data.overall == "operational" %}All systems operational
+      {% elif data.overall == "degraded" %}Degraded performance
+      {% elif data.overall == "down" %}Service disruption
+      {% else %}Status unknown{% endif %}
+    </strong>
+  </div>
+
+  {% if data.page.description %}<p>{{ data.page.description }}</p>{% endif %}
+
+  {% for component in data.components %}
+    <div class="card">
+      <div class="row">
+        <span class="dot {{ component.state }}"></span>
+        <span class="name">{{ component.name }}</span>
+        {% if component.uptime_percent is not none %}
+          <span class="pct">
+            {{ "%.2f"|format(component.uptime_percent) }}% uptime
+            {%- if component.latency_ms %} · {{ component.latency_ms|round|int }} ms{% endif %}
+          </span>
+        {% endif %}
+      </div>
+
+      {% if component.url %}<div class="url">{{ component.url }}</div>{% endif %}
+
+      {% if component.history %}
+        <div class="bars">
+          {% for day in component.history %}
+            {# No checks that day means no claim, not a green tick. #}
+            <i class="{% if not day.checks %}{% elif day.uptime_percent >= 99.9 %}ok{% elif day.uptime_percent >= 95 %}partial{% else %}bad{% endif %}"
+               title="{{ day.date }} — {% if day.checks %}{{ "%.2f"|format(day.uptime_percent) }}% of {{ day.checks }} checks{% else %}no data{% endif %}"></i>
+          {% endfor %}
+        </div>
+        {# Label the span actually drawn, not the configured window. A new
+           monitor has days of history, not months, and claiming otherwise
+           makes a short green run look like a long one. #}
+        <div class="scale">
+          <span>{{ component.history[0].date }}</span>
+          <span>{% if component.history|length > 1 %}{{ component.history[-1].date }}{% endif %}</span>
+        </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="empty">No components are published on this page yet.</p>
+  {% endfor %}
+
+  {% if data.incidents %}
+    <h2>Recent incidents</h2>
+    {% for incident in data.incidents %}
+      <div class="card incident">
+        <span class="badge {{ incident.status }}">{{ incident.status }}</span>
+        <span>{{ incident.monitor }}</span>
+        <span class="when">
+          {{ incident.started_at[:16]|replace("T", " ") }} UTC
+          {%- if incident.is_open %} · ongoing
+          {%- elif incident.duration_seconds %} · {{ (incident.duration_seconds / 60)|round|int }} min
+          {%- endif %}
+        </span>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <footer>
+    {% if data.page.support_url %}
+      <p><a href="{{ data.page.support_url }}" rel="noopener nofollow">Contact support</a></p>
+    {% endif %}
+    <p>Last updated {{ data.generated_at[:19]|replace("T", " ") }} UTC</p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -316,3 +316,52 @@ def list_monitor_incidents(monitor_id: str):
             "incidents": [i.to_dict() for i in rows],
         }
     )
+
+
+@monitors_bp.get("/<monitor_id>/uptime")
+@auth_required
+def uptime_history(monitor_id: str):
+    """Uptime history at the coarsest grain that still covers the window.
+
+    Short windows read hourly buckets, long ones daily. Both come from the
+    rollup tables rather than raw probes: a 90-day chart is 90 rows per monitor
+    instead of a quarter of a million.
+    """
+    from app.models import PingRollupDaily, PingRollupHourly
+
+    monitor = get_tenant_object_or_404(Monitor, _parse_uuid(monitor_id))
+    days = clean_int(request.args.get("days"), field="days", minimum=1, maximum=365, default=30)
+
+    # A week of hourly points is 168 bars, which a chart can still show; beyond
+    # that the daily grain is what anyone actually reads.
+    use_hourly = days <= 7
+    model = PingRollupHourly if use_hourly else PingRollupDaily
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    rows = (
+        db.session.query(model)
+        .filter(model.monitor_id == monitor.id, model.bucket >= since)
+        .order_by(model.bucket.asc())
+        .all()
+    )
+
+    measured = [r for r in rows if r.checks]
+    total_checks = sum(r.checks for r in measured)
+    total_up = sum(r.up_checks for r in measured)
+
+    return jsonify(
+        {
+            "monitor_id": str(monitor.id),
+            "window_days": days,
+            "grain": "hourly" if use_hourly else "daily",
+            "summary": {
+                "checks": total_checks,
+                "up": total_up,
+                "uptime_percent": round(total_up / total_checks * 100, 3)
+                if total_checks
+                else None,
+                "buckets": len(rows),
+            },
+            "series": [r.to_dict() for r in rows],
+        }
+    )

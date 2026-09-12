@@ -29,6 +29,15 @@ def app():
         _ensure_database(application)
         _db.drop_all()
         _db.create_all()
+        # create_all() builds ping_logs as a partitioned parent with no
+        # partitions, and a parent with no matching partition rejects every
+        # insert. Production gets these from a beat task; tests need them now.
+        from app.services import partitions
+
+        partitions.ensure_partitions()
+        partitions.ensure_default_partition()
+        _db.session.commit()
+
         yield application
         _db.session.remove()
 

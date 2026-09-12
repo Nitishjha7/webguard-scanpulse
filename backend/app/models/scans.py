@@ -40,15 +40,23 @@ def _monitor_fk():
 class PingLog(db.Model):
     """One uptime probe. The highest-volume table in the system — BIGINT
     identity rather than a UUID, and no updated_at, since rows are append-only.
+
+    Range-partitioned by month on ``checked_at``. Postgres requires the
+    partition key to be part of every unique constraint, which is why the
+    primary key is ``(id, checked_at)`` rather than ``id`` alone. Partitions are
+    created ahead of time by a beat task — see ``app.services.partitions``.
     """
 
     __tablename__ = "ping_logs"
     __table_args__ = (
         sa.Index("ix_ping_logs_monitor_checked", "monitor_id", "checked_at"),
         sa.Index("ix_ping_logs_org_checked", "org_id", "checked_at"),
+        {"postgresql_partition_by": "RANGE (checked_at)"},
     )
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        sa.BigInteger, sa.Identity(always=False), primary_key=True
+    )
     monitor_id: Mapped[uuid.UUID] = _monitor_fk()
     org_id: Mapped[uuid.UUID] = _org_fk()
 
@@ -58,7 +66,7 @@ class PingLog(db.Model):
     is_up: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
     error: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     checked_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, default=utcnow
+        sa.DateTime(timezone=True), nullable=False, default=utcnow, primary_key=True
     )
 
     monitor = relationship("Monitor", back_populates="ping_logs")

@@ -11,7 +11,9 @@ from app.models.notification import (
     NotificationChannel,
 )
 from app.models.organization import Organization
+from app.models.rollups import PingRollupDaily, PingRollupHourly
 from app.models.scans import PingLog, SecurityAudit, SslScan
+from app.models.status_page import RESERVED_SLUGS, StatusPage
 from app.models.synthetic import RunStatus, SyntheticCheck, SyntheticRun, redact_steps
 from app.models.user import WRITE_ROLES, User, UserRole
 
@@ -39,4 +41,8 @@ __all__ = [
     "SyntheticRun",
     "RunStatus",
     "redact_steps",
+    "PingRollupHourly",
+    "PingRollupDaily",
+    "StatusPage",
+    "RESERVED_SLUGS",
 ]

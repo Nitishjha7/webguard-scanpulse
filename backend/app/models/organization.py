@@ -27,6 +27,9 @@ class Organization(BaseModel):
     synthetic_checks = relationship(
         "SyntheticCheck", back_populates="organization", cascade="all, delete-orphan"
     )
+    status_pages = relationship(
+        "StatusPage", back_populates="organization", cascade="all, delete-orphan"
+    )
 
     @staticmethod
     def slugify(value: str) -> str:

@@ -6,7 +6,7 @@ tenant context binding, blueprints, error handlers and CLI commands.
 import logging
 import os
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 from app.blueprints import register_blueprints
 from app.celery_app import make_celery
@@ -38,11 +38,19 @@ def create_app(config_name: str | None = None) -> Flask:
 
     @app.get("/")
     def index():
+        # A request arriving on a tenant's own CNAME gets their status page;
+        # everything else gets the service banner.
+        from app.blueprints.status import render_for_host
+
+        page = render_for_host(request.host)
+        if page is not None:
+            return page
+
         return jsonify(
             {
                 "service": "webguard-scanpulse",
                 "version": __version__,
-                "docs": "/health/live, /api/v1/auth, /api/v1/monitors",
+                "docs": "/health/live, /api/v1/auth, /api/v1/monitors, /status/<slug>",
             }
         )
 

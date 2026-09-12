@@ -60,6 +60,9 @@ def make_celery(flask_app) -> Celery:
             # Browser runs are slow and memory-hungry; their own queue keeps a
             # backlog of journeys from delaying uptime checks.
             "webguard.run_synthetic_check": {"queue": "synthetic"},
+            # Maintenance is heavy but never urgent; keep it off the probe queue.
+            "webguard.run_retention": {"queue": "scans"},
+            "webguard.refresh_rollups": {"queue": "scans"},
         },
         task_default_queue="probes",
         beat_schedule={
@@ -77,6 +80,22 @@ def make_celery(flask_app) -> Celery:
             },
             "prune-synthetic-runs": {
                 "task": "webguard.prune_synthetic_runs",
+                "schedule": 86_400.0,
+            },
+            # Rollups refresh often enough that the dashboard never shows a
+            # gap between the last raw probe and the newest bucket.
+            "refresh-rollups": {
+                "task": "webguard.refresh_rollups",
+                "schedule": 900.0,
+            },
+            # Partition headroom is checked daily even though it only matters
+            # monthly: a missing partition would look like a site outage.
+            "ensure-partitions": {
+                "task": "webguard.ensure_partitions",
+                "schedule": 86_400.0,
+            },
+            "run-retention": {
+                "task": "webguard.run_retention",
                 "schedule": 86_400.0,
             },
         },
