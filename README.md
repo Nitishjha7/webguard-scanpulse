@@ -10,9 +10,8 @@ and reports them together — so "the checkout is up, but its certificate expire
 in six days and Redis is open to the internet" is one screen, not three
 products.
 
-**Status:** backend complete through Phase 5 — 307 tests, all passing. The
-React dashboard (Phase 6) is the remaining work; everything below is built and
-running.
+**Status:** all six phases complete — backend, worker fleet, and a React
+dashboard, 307 backend tests passing. Everything below is built and running.
 
 ---
 
@@ -62,6 +61,10 @@ curl http://localhost:5000/health/ready
 The API container waits for Postgres, runs `flask db upgrade`, then starts
 gunicorn on port 5000.
 
+Open the dashboard at [http://localhost:3000](http://localhost:3000) — nginx
+serves the built React app there and proxies `/api`, `/status` and `/health`
+through to the backend, so the browser only ever talks to one origin.
+
 ### Seed a demo tenant
 
 ```bash
@@ -108,29 +111,37 @@ interval, deep security scans once a day.
 ## How it fits together
 
 ```
-                    ┌──────────────┐
-   HTTP ───────────▶│  api (Flask) │──────┐
-   /api/v1/*        │  gunicorn    │      │
-   /status/<slug>   └──────────────┘      │
-                           │              │
-                    ┌──────▼───────┐      ▼
-                    │ postgres 16  │   ┌───────┐
-                    │ partitioned  │   │ redis │
-                    └──────▲───────┘   └───┬───┘
-                           │               │ broker
-              ┌────────────┴───────┐       │
-              │ celery worker      │◀──────┤
-              │ probes │ scans │   │       │
-              │ synthetic (Chromium)│      │
-              └────────────────────┘       │
-                                           │
-                    ┌──────────────┐       │
-                    │ celery beat  │───────┘
-                    │ ticks 30s    │
-                    └──────────────┘
+   Browser ─────▶ ┌───────────────┐
+                   │ frontend      │
+                   │ nginx + React │
+                   └───────┬───────┘
+             ┌─────────────┼──────────────┐
+             │  proxies /api, /status,     │
+             │  /health straight through   │
+             ▼                             │
+      ┌──────────────┐                     │
+      │  api (Flask) │◀────────────────────┘
+      │  gunicorn    │
+      └──────┬───────┘
+             │
+      ┌──────▼───────┐      ┌───────┐
+      │ postgres 16  │      │ redis │
+      │ partitioned  │      └───┬───┘
+      └──────▲───────┘          │ broker
+             │                  │
+   ┌─────────┴──────────┐       │
+   │ celery worker      │◀──────┤
+   │ probes │ scans │   │       │
+   │ synthetic (Chromium)│      │
+   └────────────────────┘       │
+                                │
+      ┌──────────────┐          │
+      │ celery beat  │──────────┘
+      │ ticks 30s    │
+      └──────────────┘
 ```
 
-Five containers: `backend`, `worker`, `beat`, `postgres`, `redis`.
+Six containers: `frontend`, `backend`, `worker`, `beat`, `postgres`, `redis`.
 
 **Beat knows nothing about per-monitor intervals.** It ticks every 30 seconds
 and asks Postgres which monitors are due
@@ -384,7 +395,13 @@ backend/
   migrations/       Alembic
   tests/            307 tests
 celery_worker/      Worker image (Python + Chromium)
-frontend/           React dashboard — Phase 6, not built yet
+frontend/           React dashboard
+  src/
+    components/     Sidebar, TopBar, charts, tables — presentational pieces
+    pages/          Dashboard, Login, per-section placeholders
+    lib/            api.js (fetch client), dashboard.js (API -> view derivation)
+  Dockerfile        Node build stage -> nginx runtime stage
+  nginx.conf        Proxies /api, /status, /health to the backend
 docs/               Architecture and per-phase notes
 ```
 
@@ -404,6 +421,7 @@ Flask context.
 - [Phase 3](docs/phase-3.md) — incident state machine, quorum, alerting
 - [Phase 4](docs/phase-4.md) — synthetic monitoring, port scanning
 - [Phase 5](docs/phase-5.md) — partitioning, downsampling, status pages
+- [Phase 6](docs/phase-6.md) — the dashboard, and how it was verified against live data
 
 ## Roadmap
 
@@ -414,12 +432,14 @@ Flask context.
 | 3. Quorum alerting & incident state machine | **done** — [notes](docs/phase-3.md) |
 | 4. Synthetic E2E & port scanning | **done** — [notes](docs/phase-4.md) |
 | 5. Time-series optimization & public status pages | **done** — [notes](docs/phase-5.md) |
-| 6. React dashboard, visualization & deployment | next |
+| 6. React dashboard, visualization & deployment | **done** — [notes](docs/phase-6.md) |
 
 ### Known gaps
 
-- **No React dashboard yet.** The API and public status pages are complete;
-  `frontend/` is still empty.
+- **Dashboard covers the home page only.** `/monitors`, `/security`, `/synthetic`,
+  `/alerts`, `/team`, `/settings` and the per-monitor detail page render an
+  honest placeholder naming the endpoints that already work, rather than a fake
+  "coming soon" — see `frontend/src/pages/Placeholder.jsx`.
 - **Single region.** `ping_logs.region` and `incidents.regions` are modelled and
   populated, but every probe currently runs in one place, so only the
   iteration-count half of the quorum rule is active.
@@ -432,4 +452,4 @@ Flask context.
 Python 3.11 · Flask (app factory + blueprints) · Flask-JWT-Extended ·
 SQLAlchemy 2 · Alembic · PostgreSQL 16 · Celery + Beat · Redis 7 ·
 Playwright (headless Chromium) · cryptography · dnspython · Docker Compose ·
-pytest
+pytest · React 18 (Vite) · Tailwind CSS · Recharts · nginx

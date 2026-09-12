@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+  body { @apply bg-slate-100 text-slate-900 font-sans; }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl border border-slate-200 shadow-card;
+  }
+  .card-pad { @apply p-5; }
+
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
+           transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500
+           focus-visible:ring-offset-2;
+  }
+  .btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-700; }
+  .btn-ghost-light {
+    @apply btn bg-white/10 text-white ring-1 ring-inset ring-white/25 hover:bg-white/20;
+  }
+  .btn-dark { @apply btn bg-navy-800 text-white hover:bg-navy-700 justify-center w-full; }
+
+  .nav-item {
+    @apply flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm font-medium
+           text-slate-300/85 transition-colors hover:bg-white/5 hover:text-white;
+  }
+  .nav-item-active { @apply bg-brand-600 text-white shadow-lift hover:bg-brand-600; }
+
+  /* Scrollbars inside panels, so a long alert list does not add a page
+     scrollbar that shifts the whole grid. */
+  .thin-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+  .thin-scroll::-webkit-scrollbar { width: 6px; }
+  .thin-scroll::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
+}

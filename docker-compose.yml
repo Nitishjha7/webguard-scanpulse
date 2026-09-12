@@ -116,6 +116,17 @@ services:
     # Exactly one beat process may run, or every schedule fires twice.
     command: ["celery", "-A", "celery_main:celery", "beat", "--loglevel=info", "--schedule=/var/lib/celery/beat-schedule"]
 
+  frontend:
+    build:
+      context: ./frontend
+    container_name: webguard-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:
