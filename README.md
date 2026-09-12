@@ -1,17 +1,52 @@
+<div align="center">
+
 # WebGuard (ScanPulse)
 
-Uptime monitoring and protocol-level security auditing for websites, in one
-multi-tenant platform.
+**Uptime monitoring and protocol-level security auditing for websites, in one multi-tenant platform.** Most tools do one or the other — uptime monitors tell you a site answered, security scanners tell you its TLS is weak but not whether anyone could reach it this morning. WebGuard runs both, on the same targets, on the same schedule, and reports them together.
 
-Most tools do one or the other. Uptime monitors tell you a site answered;
-security scanners tell you its TLS is weak but not whether anyone could reach
-it this morning. WebGuard runs both on the same targets, on the same schedule,
-and reports them together — so "the checkout is up, but its certificate expires
-in six days and Redis is open to the internet" is one screen, not three
-products.
+[![CI](https://github.com/Nitishjha7/webguard-scanpulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Nitishjha7/webguard-scanpulse/actions/workflows/ci.yml)
+[![tests passing](https://img.shields.io/badge/tests-307%20passing-3fb950)](backend/tests/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Flask](https://img.shields.io/badge/Flask-3.0-000000?logo=flask&logoColor=white)](backend/app/__init__.py)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169e1?logo=postgresql&logoColor=white)](backend/app/models/)
+[![Celery](https://img.shields.io/badge/Celery-5.4-37814A?logo=celery&logoColor=white)](backend/app/tasks/)
+[![React](https://img.shields.io/badge/React-18-0ea5e9?logo=react&logoColor=white)](frontend/)
+[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 
-**Status:** all six phases complete — backend, worker fleet, and a React
-dashboard, 307 backend tests passing. Everything below is built and running.
+</div>
+
+<p align="center">
+  <img src="docs/images/dashboard.png" alt="WebGuard dashboard — uptime, security grades and alerts for every monitored site" width="900">
+</p>
+
+<p align="center">
+  <sub>Live dashboard — every number on screen is read from the API in real time; nothing here is mocked.</sub>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#what-it-actually-checks">What it checks</a> ·
+  <a href="#how-it-fits-together">Architecture</a> ·
+  <a href="#api">API</a> ·
+  <a href="docs/">Engineering notes</a>
+</p>
+
+---
+
+## Overview
+
+| | |
+|---|---|
+| **Backend** | Flask 3 (app factory + blueprints), Python 3.11, SQLAlchemy 2.0, Alembic |
+| **Async** | Celery 5.4 + Celery Beat, Redis 7 (broker, dedupe locks) |
+| **Data** | PostgreSQL 16 — range-partitioned `ping_logs`, hourly/daily rollups |
+| **Inspection engines** | `cryptography`, `dnspython`, `requests`, raw sockets — no third-party scan APIs |
+| **Synthetic monitoring** | Playwright, headless Chromium |
+| **Frontend** | React 18 (Vite), Tailwind CSS, Recharts |
+| **Infra** | Docker Compose (6 containers), nginx, GitHub Actions CI |
+| **Tests** | 307 tests against a real Postgres database, ~35 seconds |
+
+**Status:** all six phases complete — backend, worker fleet, and a React dashboard. Everything below is built, tested and running.
 
 ---
 
@@ -42,13 +77,15 @@ normal, and flagging it red would train people to ignore the whole report.
 
 ## Quick start
 
-Everything runs in Docker. No local Python, Postgres or Node needed.
+Only Docker Desktop is required — no local Python, Postgres or Node.
 
 ```bash
-git clone git@github.com:Nitishjha7/webguard-scanpulse.git
+git clone https://github.com/Nitishjha7/webguard-scanpulse.git
 cd webguard-scanpulse
+
 cp .env.example .env          # edit SECRET_KEY / JWT_SECRET_KEY for anything real
-docker compose up --build     # postgres, redis, api, celery worker, celery beat
+
+docker compose up --build     # postgres, redis, api, celery worker, celery beat, frontend
 ```
 
 First build takes a while — the worker image carries Chromium (~2.8 GB).
@@ -61,8 +98,14 @@ curl http://localhost:5000/health/ready
 The API container waits for Postgres, runs `flask db upgrade`, then starts
 gunicorn on port 5000.
 
-Open the dashboard at [http://localhost:3000](http://localhost:3000) — nginx
-serves the built React app there and proxies `/api`, `/status` and `/health`
+| Service | URL |
+|---|---|
+| Dashboard | http://localhost:3000 |
+| API | http://localhost:5000 |
+| Health | http://localhost:5000/health/ready |
+| Public status page | http://localhost:5000/status/&lt;slug&gt; |
+
+nginx serves the dashboard and proxies `/api`, `/status` and `/health` straight
 through to the backend, so the browser only ever talks to one origin.
 
 ### Seed a demo tenant
@@ -110,35 +153,36 @@ interval, deep security scans once a day.
 
 ## How it fits together
 
-```
-   Browser ─────▶ ┌───────────────┐
-                   │ frontend      │
-                   │ nginx + React │
-                   └───────┬───────┘
-             ┌─────────────┼──────────────┐
-             │  proxies /api, /status,     │
-             │  /health straight through   │
-             ▼                             │
-      ┌──────────────┐                     │
-      │  api (Flask) │◀────────────────────┘
-      │  gunicorn    │
-      └──────┬───────┘
-             │
-      ┌──────▼───────┐      ┌───────┐
-      │ postgres 16  │      │ redis │
-      │ partitioned  │      └───┬───┘
-      └──────▲───────┘          │ broker
-             │                  │
-   ┌─────────┴──────────┐       │
-   │ celery worker      │◀──────┤
-   │ probes │ scans │   │       │
-   │ synthetic (Chromium)│      │
-   └────────────────────┘       │
-                                │
-      ┌──────────────┐          │
-      │ celery beat  │──────────┘
-      │ ticks 30s    │
-      └──────────────┘
+```mermaid
+flowchart TB
+    browser(["Browser"])
+    subgraph edge[" "]
+        frontend["frontend<br/>nginx + React"]
+    end
+    subgraph app[" "]
+        api["api<br/>Flask + gunicorn"]
+    end
+    subgraph data[" "]
+        pg[("postgres 16<br/>partitioned")]
+        redis[("redis<br/>broker")]
+    end
+    subgraph compute[" "]
+        worker["celery worker<br/>probes · scans · synthetic (Chromium)"]
+        beat["celery beat<br/>ticks every 30s"]
+    end
+
+    browser --> frontend
+    frontend -- "/api, /status, /health" --> api
+    api --> pg
+    api --> redis
+    worker --> pg
+    worker <-- "broker" --> redis
+    beat -- "enqueues due tasks" --> redis
+
+    classDef svc fill:#eff6ff,stroke:#2563eb,color:#1e293b
+    classDef store fill:#ecfdf5,stroke:#059669,color:#1e293b
+    class frontend,api,worker,beat svc
+    class pg,redis store
 ```
 
 Six containers: `frontend`, `backend`, `worker`, `beat`, `postgres`, `redis`.
@@ -156,6 +200,36 @@ slow target delays only its own probe.
 | `probes` | Uptime checks — high volume, seconds |
 | `scans` | TLS, headers, DNS, ports, maintenance — daily, slower |
 | `synthetic` | Browser journeys — minutes, memory-hungry |
+
+### One probe cycle, end to end
+
+```mermaid
+sequenceDiagram
+    participant Beat as celery beat
+    participant Redis
+    participant Worker as celery worker
+    participant DB as PostgreSQL
+    participant Alert as notify_incident
+
+    Beat->>DB: SELECT monitors WHERE due
+    Beat->>Redis: enqueue probe_monitor(id)
+    Redis-->>Worker: deliver task
+    Worker->>Worker: GET target URL
+    Worker->>DB: INSERT ping_logs (raw probe)
+    Worker->>DB: evaluate incident state machine
+    alt 2nd consecutive failure
+        Worker->>DB: OPEN incident (quorum reached)
+        Worker->>Redis: enqueue notify_incident
+        Redis-->>Alert: deliver task
+        Alert->>Alert: fan out to Slack/Discord/email/webhook
+    else 1st failure only
+        Note over Worker: below quorum — no incident, no page
+    end
+```
+
+One failed probe never pages anyone — that's not a delay, it's the anti-flapping
+design. The [status page screenshot below](#public-status-pages) shows the same
+incident, opened for real, all the way through to the public page.
 
 ---
 
@@ -195,6 +269,21 @@ show is a deliberate list rather than whatever a model happens to carry.
 Monitor URLs and latency are opt-in and off by default; incident `root_cause` is
 never published at all, because our probes write it and it routinely names
 internal infrastructure.
+
+---
+
+## Public status pages
+
+<p align="center">
+  <img src="docs/images/status-page.png" alt="Public status page showing a real open incident, uptime bars and history" width="480">
+</p>
+
+<p align="center">
+  <sub>An actual incident, opened by the real anti-flapping quorum above — banner, per-site state, uptime bar and the incident log all agree, because they are all read from the same database at request time.</sub>
+</p>
+
+Anonymous, cacheable, and deliberately narrow in what it discloses — see
+["things that are easy to get wrong" above](#things-that-are-easy-to-get-wrong-and-how-they-are-handled).
 
 ---
 
@@ -368,7 +457,10 @@ with flask_app.app_context():
 The suite runs against a real Postgres database, not SQLite — the schema uses
 JSONB, a partial unique index, declarative partitioning and
 `percentile_cont ... WITHIN GROUP`, none of which SQLite has. A SQLite run would
-pass while the real thing broke. See [docs/testing.md](docs/testing.md).
+pass while the real thing broke. GitHub Actions CI runs the same suite against
+a Postgres service container on every push — see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml). More detail in
+[docs/testing.md](docs/testing.md).
 
 Code lives on a bind mount, so edits are picked up by
 `docker compose restart backend worker` without a rebuild. Rebuild only when
@@ -402,7 +494,9 @@ frontend/           React dashboard
     lib/            api.js (fetch client), dashboard.js (API -> view derivation)
   Dockerfile        Node build stage -> nginx runtime stage
   nginx.conf        Proxies /api, /status, /health to the backend
-docs/               Architecture and per-phase notes
+.github/workflows/  CI: pytest against a Postgres service container, Vite
+                    build, and a Docker build of both images, on every push
+docs/               Architecture, per-phase engineering notes, screenshots
 ```
 
 Engines are deliberately plain functions returning `{"ok": bool, ...}`. They
@@ -412,16 +506,20 @@ Flask context.
 
 ---
 
-## Docs
+## Engineering notes
 
-- [Architecture & Technical Specification](docs/architecture.md) — the original design
-- [Testing](docs/testing.md) — what is covered, what is not, and why
-- [Phase 1](docs/phase-1.md) — scaffold, multi-tenancy, auth
-- [Phase 2](docs/phase-2.md) — inspection engines, Celery workers
-- [Phase 3](docs/phase-3.md) — incident state machine, quorum, alerting
-- [Phase 4](docs/phase-4.md) — synthetic monitoring, port scanning
-- [Phase 5](docs/phase-5.md) — partitioning, downsampling, status pages
-- [Phase 6](docs/phase-6.md) — the dashboard, and how it was verified against live data
+Every phase is documented with the reasoning behind it, not just the diff.
+
+| | |
+|---|---|
+| [Architecture & Technical Specification](docs/architecture.md) | The original design |
+| [Testing](docs/testing.md) | What is covered, what is not, and why |
+| [Phase 1](docs/phase-1.md) | Scaffold, multi-tenancy, auth |
+| [Phase 2](docs/phase-2.md) | Inspection engines, Celery workers |
+| [Phase 3](docs/phase-3.md) | Incident state machine, quorum, alerting |
+| [Phase 4](docs/phase-4.md) | Synthetic monitoring, port scanning |
+| [Phase 5](docs/phase-5.md) | Partitioning, downsampling, status pages |
+| [Phase 6](docs/phase-6.md) | The dashboard, and how it was verified against live data |
 
 ## Roadmap
 
@@ -434,7 +532,11 @@ Flask context.
 | 5. Time-series optimization & public status pages | **done** — [notes](docs/phase-5.md) |
 | 6. React dashboard, visualization & deployment | **done** — [notes](docs/phase-6.md) |
 
-### Known gaps
+---
+
+## Not built
+
+Stated plainly rather than implied:
 
 - **Dashboard covers the home page only.** `/monitors`, `/security`, `/synthetic`,
   `/alerts`, `/team`, `/settings` and the per-monitor detail page render an
@@ -446,10 +548,18 @@ Flask context.
 - **No Twilio SMS.** The four shipped channels cover the same need without a
   paid dependency.
 - **No API rate limiting.** Redis is already in the stack for it; not wired up.
+- **Live deployment.** The Docker Compose stack and nginx config are
+  production-shaped; nothing is hosted publicly yet.
+
+---
 
 ## Tech stack
 
 Python 3.11 · Flask (app factory + blueprints) · Flask-JWT-Extended ·
 SQLAlchemy 2 · Alembic · PostgreSQL 16 · Celery + Beat · Redis 7 ·
 Playwright (headless Chromium) · cryptography · dnspython · Docker Compose ·
-pytest · React 18 (Vite) · Tailwind CSS · Recharts · nginx
+GitHub Actions · pytest · React 18 (Vite) · Tailwind CSS · Recharts · nginx
+
+## License
+
+[MIT](LICENSE) © Nitish Kumar Jha

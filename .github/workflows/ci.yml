@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    name: Backend tests (pytest)
+    runs-on: ubuntu-latest
+
+    # A real Postgres, not SQLite. The schema is Postgres-specific — JSONB
+    # columns, the partial unique index guarding duplicate incidents,
+    # make_interval() in the beat dispatcher, declarative range partitioning —
+    # so a SQLite run would pass while the real thing breaks.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: webguard
+          POSTGRES_PASSWORD: webguard
+          POSTGRES_DB: webguard_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U webguard -d webguard_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run pytest
+        working-directory: backend
+        env:
+          FLASK_ENV: testing
+          # The default in TestingConfig points at "postgres", the compose
+          # service name. Here the service container is reachable on
+          # localhost instead.
+          TEST_DATABASE_URL: postgresql+psycopg2://webguard:webguard@localhost:5432/webguard_test
+        run: pytest --cov=app --cov-report=term-missing
+
+  frontend-build:
+    name: Frontend build (Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  docker-build:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t webguard-backend:ci ./backend
+
+      - name: Build frontend image
+        run: docker build -t webguard-frontend:ci ./frontend
+
+      # The worker image installs Chromium and its system libraries (~2.8GB) —
+      # skipped in CI to keep the pipeline fast. It shares backend/requirements.txt
+      # with the job above, so a dependency break there still surfaces.
